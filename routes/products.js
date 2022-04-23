@@ -2,6 +2,33 @@ const { count } = require('console');
 const express = require('express');
 const { Product } = require('../models/product');
 const router = express.Router();
+const multer = require('multer');
+
+const FILE_TYPE_MAP = {
+    'image/png': 'png',
+    'image/jpeg': 'jpeg',
+    'image/jpg': 'jpg',
+};
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const isValid = FILE_TYPE_MAP[file.mimetype];
+        let uploadError = new Error('invalid image type');
+
+        if (isValid) {
+            uploadError = null;
+        }
+        cb(uploadError, 'public/uploads');
+    },
+    filename: function (req, file, cb) {
+        let fileName = file.originalname.split(' ').join('-');
+        fileName = fileName.split('.')[0];
+        const extension = FILE_TYPE_MAP[file.mimetype];
+        cb(null, `${fileName}-${Date.now()}.${extension}`);
+    },
+});
+
+const uploadOptions = multer({ storage: storage });
 
 // get all the products list
 router.get(`/`, async (req, res) => {
@@ -44,10 +71,15 @@ router.put('/:id', async (req, res) => {
 })
 
 // add product to the product table
-router.post(`/`, async (req, res) => {
+router.post(`/`, uploadOptions.single('image'), async (req, res) => {
+    const file = req.file;
+    if (!file) return res.status(400).send('No image in the request');
+
+    const fileName = file.filename;
+    const basePath = `${req.protocol}://${req.get('host')}/public/uploads/`;
     let newProduct = new Product({
         name: req.body.name,
-        image: req.body.image,
+        image: `${basePath}${fileName}`,
         price: req.body.price,
         category: req.body.category,
         stockCount: req.body.stockCount
